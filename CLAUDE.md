@@ -34,7 +34,10 @@ npm run build        # Build for production
 npm run start        # Start production server
 
 # Code Quality
-npm run lint         # Run ESLint
+npm run lint         # Run ESLint (Next.js + TypeScript rules)
+
+# Environment Setup
+# Copy .env.example to .env.local and set FISH_AUDIO_API_KEY before first run
 ```
 
 ## Task Management
@@ -54,6 +57,25 @@ npm run lint         # Run ESLint
 ## Key Files
 
 - `voice-clone-app/CLAUDE.md` - Detailed technical architecture and implementation guidance
-- `todo.md` - Task tracking and project status
+- `todo.md` - Task tracking and project status (project completed)
 - `fish_audio_documentation.md` - API documentation
 - `voice-clone-app/lib/fish-audio.ts` - Main API integration
+- `voice-clone-app/lib/security.ts` - Security layer (rate limiting, file validation)
+- `voice-clone-app/lib/db.ts` - SQLite database operations
+- `voice-clone-app/app/api/` - Next.js API routes for Fish Audio proxy
+
+## Technology Stack
+
+- **Frontend**: Next.js 15.4.6 with App Router, React 19, TypeScript 5
+- **Styling**: Tailwind CSS v4, Radix UI components
+- **Database**: SQLite with better-sqlite3 (synchronous)
+- **API Integration**: Fish Audio API via msgpack-js
+- **File Handling**: formidable for multipart uploads
+- **Validation**: Zod for environment variables and schemas
+
+## Environment Setup
+
+1. Copy `.env.example` to `.env.local` in the `voice-clone-app/` directory
+2. Set `FISH_AUDIO_API_KEY` from https://fish.audio/go-api/
+3. Optional: Configure CORS origins, file size limits, and other settings
+4. Database auto-initializes on first run at `data/voice-clone.db`
