@@ -344,7 +344,7 @@ export default function AudioPlayer({
                 max={duration || 0}
                 value={currentTime}
                 onChange={handleSeek}
-                className="w-full h-2 slider-progress cursor-pointer"
+                className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer slider-progress"
                 style={progressStyle}
               />
             </div>
@@ -389,9 +389,7 @@ export default function AudioPlayer({
                   value={isMuted ? 0 : volume}
                   onChange={handleVolumeChange}
                   className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer slider"
-                  style={{
-                    background: `linear-gradient(to right, var(--primary) 0%, var(--primary) ${(isMuted ? 0 : volume) * 100}%, var(--muted) ${(isMuted ? 0 : volume) * 100}%, var(--muted) 100%)`
-                  }}
+                  style={volumeStyle}
                 />
               </div>
             </div>
