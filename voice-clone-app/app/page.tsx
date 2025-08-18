@@ -14,8 +14,8 @@ interface GeneratedAudioData {
   duration?: number;
   text: string;
   modelUsed?: {
-    id: number;
-    name: string;
+    id: string;
+    title: string;
   };
 }
 
@@ -134,7 +134,7 @@ export default function Home() {
                   <AudioPlayer
                     audioUrl={generatedAudio.audioUrl}
                     title="Generated Speech"
-                    subtitle={`Model: ${generatedAudio.data.modelUsed?.name || 'Unknown'} | Format: ${generatedAudio.data.format?.toUpperCase() || 'Unknown'}`}
+                    subtitle={`Model: ${generatedAudio.data.modelUsed?.title || 'Unknown'} | Format: ${generatedAudio.data.format?.toUpperCase() || 'Unknown'}`}
                     onError={(error) => console.error(error)}
                   />
                 </CardContent>

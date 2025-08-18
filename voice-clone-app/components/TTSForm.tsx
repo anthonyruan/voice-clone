@@ -3,11 +3,11 @@
 import { useState, useEffect, useCallback } from 'react';
 
 interface VoiceModel {
-  id: number;
-  name: string;
+  id: string;
+  title: string;
   description?: string;
-  fishAudioId: string;
-  createdAt: string;
+  fish_model_id: string;
+  created_at: string;
 }
 
 interface GeneratedAudioData {
@@ -16,8 +16,8 @@ interface GeneratedAudioData {
   duration?: number;
   text: string;
   modelUsed?: {
-    id: number;
-    name: string;
+    id: string;
+    title: string;
   };
 }
 
@@ -28,7 +28,7 @@ interface TTSFormProps {
 
 interface FormData {
   text: string;
-  modelId: number | null;
+  modelId: string | null;
   format: 'wav' | 'mp3';
   speed: number;
 }
@@ -53,7 +53,7 @@ export default function TTSForm({ onSuccess, onError }: TTSFormProps) {
   const [formData, setFormData] = useState<FormData>({
     text: '',
     modelId: null,
-    format: 'wav',
+    format: 'mp3',
     speed: 1.0,
   });
   const [voiceModels, setVoiceModels] = useState<VoiceModel[]>([]);
@@ -208,7 +208,7 @@ export default function TTSForm({ onSuccess, onError }: TTSFormProps) {
             <select
               id="model"
               value={formData.modelId || ''}
-              onChange={(e) => setFormData(prev => ({ ...prev, modelId: parseInt(e.target.value) || null }))}
+              onChange={(e) => setFormData(prev => ({ ...prev, modelId: e.target.value || null }))}
               className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white ${
                 errors.modelId ? 'border-red-500' : 'border-gray-300'
               }`}
@@ -217,7 +217,7 @@ export default function TTSForm({ onSuccess, onError }: TTSFormProps) {
               <option value="">Select a voice model</option>
               {voiceModels.map((model) => (
                 <option key={model.id} value={model.id}>
-                  {model.name} {model.description && `- ${model.description}`}
+                  {model.title} {model.description && `- ${model.description}`}
                 </option>
               ))}
             </select>
@@ -271,8 +271,8 @@ export default function TTSForm({ onSuccess, onError }: TTSFormProps) {
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
               disabled={isLoading}
             >
+              <option value="mp3">MP3 (Recommended)</option>
               <option value="wav">WAV (Higher Quality)</option>
-              <option value="mp3">MP3 (Smaller Size)</option>
             </select>
           </div>
 

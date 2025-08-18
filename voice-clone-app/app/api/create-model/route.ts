@@ -4,7 +4,6 @@ import { createFishAudioClient } from '@/lib/fish-audio';
 import { handleCorsOptions, createCorsResponse } from '@/lib/cors';
 import { sanitizeErrorMessage, sanitizeTextInput, validateAudioFile, checkRateLimit, getClientIP } from '@/lib/security';
 import { getMaxFileSizeBytes } from '@/lib/config';
-import formidable from 'formidable';
 import { promises as fs } from 'fs';
 // path import removed as it's not used
 
@@ -14,73 +13,64 @@ interface CreateModelRequestBody {
   description?: string;
 }
 
-// Helper function to parse form data with file uploads
+// Helper function to parse form data with file uploads using native FormData
 async function parseFormData(request: NextRequest): Promise<{
   fields: CreateModelRequestBody;
-  files: { audio?: formidable.File };
+  files: { audio?: { filepath: string; originalFilename?: string; mimetype?: string; size: number } };
 }> {
-  const form = formidable({
-    uploadDir: '/tmp',
-    keepExtensions: true,
-    maxFileSize: getMaxFileSizeBytes(), // Configurable max file size
-    filter: (part) => {
-      return part.name === 'audio' && part.mimetype?.startsWith('audio/') || false;
-    }
-  });
-
-  return new Promise((resolve, reject) => {
-    // Convert NextRequest to Node.js IncomingMessage-like object
-    const chunks: Buffer[] = [];
+  try {
+    const formData = await request.formData();
     
-    const reader = request.body?.getReader();
-    if (!reader) {
-      reject(new Error('No request body'));
-      return;
+    // Extract fields
+    const name = formData.get('name')?.toString() || '';
+    const description = formData.get('description')?.toString();
+    
+    // Extract audio file
+    const audioFile = formData.get('audio') as File | null;
+    
+    if (!audioFile) {
+      return {
+        fields: {
+          name: sanitizeTextInput(name),
+          description: description ? sanitizeTextInput(description) : undefined,
+        },
+        files: {}
+      };
     }
 
-    const pump = () => {
-      reader.read().then(({ done, value }) => {
-        if (done) {
-          const buffer = Buffer.concat(chunks);
-          
-          // Create a mock IncomingMessage object
-          const mockReq = {
-            method: request.method,
-            headers: Object.fromEntries(request.headers.entries()),
-            url: request.url,
-            body: buffer,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          } as any;
+    // Check file size
+    if (audioFile.size > getMaxFileSizeBytes()) {
+      throw new Error(`File size exceeds maximum allowed size of ${getMaxFileSizeBytes() / (1024 * 1024)}MB`);
+    }
 
-          form.parse(mockReq, (err, fields, files) => {
-            if (err) {
-              reject(err);
-              return;
-            }
+    // Check file type
+    if (!audioFile.type.startsWith('audio/')) {
+      throw new Error('File is not a valid audio format');
+    }
 
-            const parsedFields: CreateModelRequestBody = {
-              name: sanitizeTextInput(Array.isArray(fields.name) ? fields.name[0] : fields.name || ''),
-              description: fields.description ? sanitizeTextInput(Array.isArray(fields.description) ? fields.description[0] : fields.description) : undefined,
-            };
+    // Create temporary file
+    const buffer = Buffer.from(await audioFile.arrayBuffer());
+    const tempFilePath = `/tmp/upload_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    
+    await fs.writeFile(tempFilePath, buffer);
 
-            const parsedFiles = {
-              audio: Array.isArray(files.audio) ? files.audio[0] : files.audio,
-            };
-
-            resolve({
-              fields: parsedFields,
-              files: parsedFiles,
-            });
-          });
-        } else {
-          chunks.push(Buffer.from(value));
-          pump();
+    return {
+      fields: {
+        name: sanitizeTextInput(name),
+        description: description ? sanitizeTextInput(description) : undefined,
+      },
+      files: {
+        audio: {
+          filepath: tempFilePath,
+          originalFilename: audioFile.name,
+          mimetype: audioFile.type,
+          size: audioFile.size
         }
-      }).catch(reject);
+      }
     };
-
-    pump();
-  });
+  } catch (error) {
+    throw new Error(`Failed to parse form data: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
 }
 
 /**
@@ -181,6 +171,11 @@ export async function POST(request: NextRequest) {
       audioData: audioBuffer,
       audioFormat: audioFormat,
     });
+
+    // Validate the response before saving to database
+    if (!cloneResponse || !cloneResponse.id) {
+      throw new Error('Fish Audio API did not return a valid model ID');
+    }
 
     // Save model information to database
     const newModel = db.createModel({

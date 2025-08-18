@@ -36,15 +36,33 @@ export interface CreateVoiceModelRequest {
 }
 
 export interface VoiceModel {
-  id: string;
+  _id: string;
   title: string;
   description: string;
   visibility: string;
   type: string;
   created_at: string;
   updated_at: string;
-  user_id: string;
-  status: 'pending' | 'training' | 'ready' | 'failed';
+  state: 'pending' | 'training' | 'trained' | 'failed';
+  cover_image: string;
+  train_mode: string;
+  tags: string[];
+  samples: any[];
+  languages: string[];
+  lock_visibility: boolean;
+  default_text: string;
+  like_count: number;
+  mark_count: number;
+  shared_count: number;
+  task_count: number;
+  unliked: boolean;
+  liked: boolean;
+  marked: boolean;
+  author: {
+    _id: string;
+    nickname: string;
+    avatar: string;
+  };
 }
 
 export interface TTSResponse {
@@ -155,33 +173,44 @@ export class FishAudioClient {
    */
   async textToSpeech(request: TTSRequest, model: string = 'speech-1.6'): Promise<Uint8Array> {
     // Prepare the request data
-    const ttsData = {
+    const ttsData: any = {
       text: request.text,
       chunk_length: request.chunk_length || 200,
       format: request.format || 'mp3',
-      mp3_bitrate: request.mp3_bitrate || 128,
       references: request.references || [],
-      reference_id: request.reference_id || null,
       normalize: request.normalize !== false,
       latency: request.latency || 'normal',
-      temperature: request.temperature,
-      top_p: request.top_p,
-      prosody: request.prosody,
     };
+
+    // Add format-specific parameters
+    if (request.format === 'mp3') {
+      ttsData.mp3_bitrate = request.mp3_bitrate || 128;
+    }
+
+    // Only add fields if they are defined
+    if (request.reference_id) {
+      ttsData.reference_id = request.reference_id;
+    }
+    if (request.temperature !== undefined) {
+      ttsData.temperature = request.temperature;
+    }
+    if (request.top_p !== undefined) {
+      ttsData.top_p = request.top_p;
+    }
+    if (request.prosody) {
+      ttsData.prosody = request.prosody;
+    }
 
     // Pack the data using msgpack
     const encodedData = msgpack.encode(ttsData);
-    const packedData = encodedData instanceof Buffer 
-      ? new Uint8Array(encodedData) 
-      : encodedData;
-
+    
     const response = await fetch(`${this.baseUrl}/v1/tts`, {
       method: 'POST',
       headers: {
         ...this.getHeaders('application/msgpack'),
         'model': model,
       },
-      body: packedData instanceof Buffer ? packedData.buffer : packedData,
+      body: encodedData,
     });
 
     return this.handleResponse<Uint8Array>(response);
@@ -351,11 +380,12 @@ export class VoiceCloneClient {
       });
 
       return {
-        id: voiceModel.id,
-        status: voiceModel.status,
+        id: voiceModel._id,
+        status: voiceModel.state,
         message: `Voice model "${request.name}" created successfully`
       };
     } catch (error) {
+      console.error('Fish Audio API error in cloneVoice:', error);
       throw new Error(`Fish Audio API error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }

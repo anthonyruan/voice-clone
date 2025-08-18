@@ -10,7 +10,7 @@ import { randomUUID } from 'crypto';
 // Interface for the request body
 interface TTSRequestBody {
   text: string;
-  modelId?: number;
+  modelId?: string;
   modelName?: string;
   format?: 'wav' | 'mp3';
   speed?: number;
@@ -37,8 +37,8 @@ function validateTTSRequest(body: TTSRequestBody): { isValid: boolean; errors: s
     errors.push('Either modelId or modelName must be provided');
   }
 
-  if (body.modelId && (!Number.isInteger(body.modelId) || body.modelId <= 0)) {
-    errors.push('modelId must be a positive integer');
+  if (body.modelId && (typeof body.modelId !== 'string' || body.modelId.trim().length === 0)) {
+    errors.push('modelId must be a non-empty string');
   }
 
   if (body.format && !['wav', 'mp3'].includes(body.format)) {
@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
     let voiceModel;
 
     if (body.modelId) {
-      voiceModel = db.getModelById(body.modelId.toString());
+      voiceModel = db.getModelById(body.modelId);
     } else if (body.modelName) {
       voiceModel = db.getModelByName(body.modelName);
     }
@@ -118,7 +118,7 @@ export async function POST(request: NextRequest) {
       }, { status: 404, origin });
     }
 
-    if (!voiceModel.fishAudioId) {
+    if (!voiceModel.fish_model_id) {
       return createCorsResponse({
         success: false,
         error: 'Model not ready',
@@ -132,7 +132,7 @@ export async function POST(request: NextRequest) {
     // Generate speech using Fish Audio API
     const ttsResponse = await fishAudioClient.generateSpeech({
       text: body.text.trim(),
-      voiceId: voiceModel.fishAudioId,
+      voiceId: voiceModel.fish_model_id,
       format: body.format || 'wav',
       speed: body.speed || 1.0,
     });
@@ -155,7 +155,7 @@ export async function POST(request: NextRequest) {
           text: body.text.trim(),
           modelUsed: {
             id: voiceModel.id,
-            name: voiceModel.name,
+            title: voiceModel.title,
           }
         },
         message: 'Speech generated successfully'
@@ -172,7 +172,7 @@ export async function POST(request: NextRequest) {
           text: body.text.trim(),
           modelUsed: {
             id: voiceModel.id,
-            name: voiceModel.name,
+            title: voiceModel.title,
           }
         },
         message: 'Speech generated successfully'

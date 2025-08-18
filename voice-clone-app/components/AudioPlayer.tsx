@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Play, Pause, Volume2, VolumeX, Download, AlertCircle } from 'lucide-react';
 
 interface AudioPlayerProps {
@@ -26,6 +26,22 @@ export default function AudioPlayer({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const animationRef = useRef<number | null>(null);
+
+  // Calculate styles at component level, not in JSX
+  const progressStyle = useMemo(() => {
+    const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
+    return {
+      background: `linear-gradient(to right, var(--primary) 0%, var(--primary) ${progressPercent}%, var(--muted) ${progressPercent}%, var(--muted) 100%)`
+    };
+  }, [currentTime, duration]);
+
+  const volumeStyle = useMemo(() => {
+    const volumePercent = (isMuted ? 0 : volume) * 100;
+    return {
+      background: `linear-gradient(to right, var(--primary) 0%, var(--primary) ${volumePercent}%, var(--muted) ${volumePercent}%, var(--muted) 100%)`
+    };
+  }, [isMuted, volume]);
 
   // Reset state when audio URL changes
   useEffect(() => {
@@ -34,7 +50,21 @@ export default function AudioPlayer({
     setDuration(0);
     setIsLoading(true);
     setError(null);
+    // Cancel any ongoing animation
+    if (animationRef.current) {
+      cancelAnimationFrame(animationRef.current);
+      animationRef.current = null;
+    }
   }, [audioUrl]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+    };
+  }, []);
 
   // Handle audio loading
   const handleLoadedMetadata = () => {
@@ -44,12 +74,20 @@ export default function AudioPlayer({
     }
   };
 
-  // Handle time updates
-  const handleTimeUpdate = () => {
-    if (audioRef.current) {
+  // Simple progress update function
+  const updateProgress = useCallback(() => {
+    if (audioRef.current && !audioRef.current.paused) {
+      setCurrentTime(audioRef.current.currentTime);
+      animationRef.current = requestAnimationFrame(updateProgress);
+    }
+  }, []);
+
+  // Handle time updates (fallback for when animation is not running)
+  const handleTimeUpdate = useCallback(() => {
+    if (audioRef.current && !isPlaying) {
       setCurrentTime(audioRef.current.currentTime);
     }
-  };
+  }, [isPlaying]);
 
   // Handle play/pause
   const togglePlayPause = async () => {
@@ -57,14 +95,84 @@ export default function AudioPlayer({
 
     try {
       if (isPlaying) {
+        // Stop the animation when pausing
+        if (animationRef.current) {
+          cancelAnimationFrame(animationRef.current);
+          animationRef.current = null;
+        }
         audioRef.current.pause();
         setIsPlaying(false);
       } else {
-        await audioRef.current.play();
-        setIsPlaying(true);
+        // Special handling for WAV files
+        const isWav = audioUrl.toLowerCase().includes('.wav');
+        
+        if (isWav) {
+          // Force reload for WAV files to ensure proper decoding
+          audioRef.current.load();
+          
+          // Wait for the audio to be ready
+          await new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+              reject(new Error('Audio loading timeout'));
+            }, 10000); // 10 second timeout
+            
+            const handleCanPlayThrough = () => {
+              clearTimeout(timeout);
+              audioRef.current?.removeEventListener('canplaythrough', handleCanPlayThrough);
+              audioRef.current?.removeEventListener('error', handleError);
+              resolve(void 0);
+            };
+            
+            const handleError = () => {
+              clearTimeout(timeout);
+              audioRef.current?.removeEventListener('canplaythrough', handleCanPlayThrough);
+              audioRef.current?.removeEventListener('error', handleError);
+              reject(new Error('Audio loading failed'));
+            };
+            
+            audioRef.current?.addEventListener('canplaythrough', handleCanPlayThrough);
+            audioRef.current?.addEventListener('error', handleError);
+          });
+        } else {
+          // For non-WAV files, use lighter loading check
+          if (audioRef.current.readyState < 2) {
+            audioRef.current.load();
+            await new Promise((resolve) => {
+              const handleCanPlay = () => {
+                audioRef.current?.removeEventListener('canplay', handleCanPlay);
+                resolve(void 0);
+              };
+              audioRef.current?.addEventListener('canplay', handleCanPlay);
+            });
+          }
+        }
+        
+        // Reset currentTime to 0 before playing
+        audioRef.current.currentTime = 0;
+        
+        const playPromise = audioRef.current.play();
+        
+        if (playPromise !== undefined) {
+          await playPromise;
+          setIsPlaying(true);
+          // Start animation when playing
+          animationRef.current = requestAnimationFrame(updateProgress);
+        }
       }
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to play audio';
+      let errorMessage = 'Failed to play audio';
+      
+      if (err instanceof Error) {
+        if (err.name === 'NotAllowedError') {
+          errorMessage = 'Audio playback requires user interaction. Please try clicking the play button again.';
+        } else if (err.name === 'AbortError') {
+          errorMessage = 'Audio playback was interrupted. Please try again.';
+        } else if (err.message.includes('timeout')) {
+          errorMessage = 'Audio loading timed out. The WAV file may be incompatible. Try using MP3 format instead.';
+        } else {
+          errorMessage = err.message;
+        }
+      }
       setError(errorMessage);
       onError?.(errorMessage);
     }
@@ -108,6 +216,11 @@ export default function AudioPlayer({
 
   // Handle audio end
   const handleEnded = () => {
+    // Stop animation when audio ends
+    if (animationRef.current) {
+      cancelAnimationFrame(animationRef.current);
+      animationRef.current = null;
+    }
     setIsPlaying(false);
     setCurrentTime(0);
     if (audioRef.current) {
@@ -117,7 +230,18 @@ export default function AudioPlayer({
 
   // Handle audio error
   const handleError = () => {
-    const errorMessage = 'Failed to load audio file';
+    const isWav = audioUrl.toLowerCase().includes('.wav');
+    let errorMessage = 'Failed to load audio file';
+    
+    if (audioRef.current?.error) {
+      const error = audioRef.current.error;
+      if (error.code === MediaError.MEDIA_ERR_DECODE && isWav) {
+        errorMessage = 'WAV format is not supported by your browser. Please use MP3 format for better compatibility.';
+      } else {
+        errorMessage = `Audio error: ${error.message || 'Media failed to decode'}`;
+      }
+    }
+    
     setError(errorMessage);
     setIsLoading(false);
     onError?.(errorMessage);
@@ -142,11 +266,30 @@ export default function AudioPlayer({
   };
 
   if (error) {
+    const isWavError = error.includes('WAV format is not supported');
+    
     return (
       <div className={`bg-red-500/10 border border-red-500/20 rounded-lg p-4 ${className}`}>
-        <div className="flex items-center">
-          <AlertCircle className="h-5 w-5 text-red-500 mr-3" />
-          <p className="text-sm text-red-500">{error}</p>
+        <div className="flex items-start">
+          <AlertCircle className="h-5 w-5 text-red-500 mr-3 mt-0.5 flex-shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm text-red-500">{error}</p>
+            {isWavError && (
+              <div className="mt-3 space-y-2">
+                <p className="text-xs text-red-400">
+                  Suggestion: Generate a new audio file using MP3 format instead.
+                </p>
+                <a
+                  href={audioUrl}
+                  download
+                  className="inline-flex items-center text-xs text-red-600 hover:text-red-800 underline"
+                >
+                  <Download className="h-3 w-3 mr-1" />
+                  Download WAV file anyway
+                </a>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -162,7 +305,9 @@ export default function AudioPlayer({
         onTimeUpdate={handleTimeUpdate}
         onEnded={handleEnded}
         onError={handleError}
-        preload="metadata"
+        preload="auto"
+        crossOrigin="anonymous"
+        controls={false}
       />
 
       {/* Header */}
@@ -199,10 +344,8 @@ export default function AudioPlayer({
                 max={duration || 0}
                 value={currentTime}
                 onChange={handleSeek}
-                className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
-                style={{
-                  background: `linear-gradient(to right, var(--primary) 0%, var(--primary) ${(currentTime / duration) * 100}%, var(--muted) ${(currentTime / duration) * 100}%, var(--muted) 100%)`
-                }}
+                className="w-full h-2 slider-progress cursor-pointer"
+                style={progressStyle}
               />
             </div>
             <div className="flex justify-between text-xs text-muted-foreground">
@@ -237,15 +380,20 @@ export default function AudioPlayer({
                   <Volume2 className="w-5 h-5" />
                 )}
               </button>
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.1"
-                value={isMuted ? 0 : volume}
-                onChange={handleVolumeChange}
-                className="flex-1 h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
-              />
+              <div className="flex-1 relative">
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.1"
+                  value={isMuted ? 0 : volume}
+                  onChange={handleVolumeChange}
+                  className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer slider"
+                  style={{
+                    background: `linear-gradient(to right, var(--primary) 0%, var(--primary) ${(isMuted ? 0 : volume) * 100}%, var(--muted) ${(isMuted ? 0 : volume) * 100}%, var(--muted) 100%)`
+                  }}
+                />
+              </div>
             </div>
 
             {/* Download Button */}
@@ -256,6 +404,17 @@ export default function AudioPlayer({
             >
               <Download className="w-5 h-5" />
             </button>
+            
+            {/* Direct Link Test */}
+            <a
+              href={audioUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="ml-2 p-2 text-muted-foreground hover:text-foreground border border-border/50 rounded-lg hover:bg-muted/50 transition-all duration-200 text-xs"
+              title="Open audio in new tab"
+            >
+              🔗
+            </a>
           </div>
         </div>
       )}
