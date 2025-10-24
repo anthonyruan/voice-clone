@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { AudioWaveform, Mic, Sparkles } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { VoiceModelCreator } from '@/components/VoiceModelCreator';
 import { TextToSpeechGenerator } from '@/components/TextToSpeechGenerator';
 import AudioPlayer from '@/components/AudioPlayer';

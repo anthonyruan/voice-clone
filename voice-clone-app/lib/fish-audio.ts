@@ -35,6 +35,12 @@ export interface CreateVoiceModelRequest {
   cover_image?: File;
 }
 
+export interface VoiceModelSample {
+  audio?: string;
+  text?: string;
+  [key: string]: unknown;
+}
+
 export interface VoiceModel {
   _id: string;
   title: string;
@@ -47,7 +53,7 @@ export interface VoiceModel {
   cover_image: string;
   train_mode: string;
   tags: string[];
-  samples: any[];
+  samples: VoiceModelSample[];
   languages: string[];
   lock_visibility: boolean;
   default_text: string;
@@ -173,7 +179,7 @@ export class FishAudioClient {
    */
   async textToSpeech(request: TTSRequest, model: string = 'speech-1.6'): Promise<Uint8Array> {
     // Prepare the request data
-    const ttsData: any = {
+    const ttsData: Record<string, unknown> = {
       text: request.text,
       chunk_length: request.chunk_length || 200,
       format: request.format || 'mp3',
@@ -203,14 +209,18 @@ export class FishAudioClient {
 
     // Pack the data using msgpack
     const encodedData = msgpack.encode(ttsData);
-    
+    // Convert to Uint8Array for fetch compatibility
+    const bodyData = encodedData instanceof Uint8Array
+      ? encodedData
+      : new Uint8Array(encodedData as ArrayBufferLike);
+
     const response = await fetch(`${this.baseUrl}/v1/tts`, {
       method: 'POST',
       headers: {
         ...this.getHeaders('application/msgpack'),
         'model': model,
       },
-      body: encodedData,
+      body: bodyData as BodyInit,
     });
 
     return this.handleResponse<Uint8Array>(response);
