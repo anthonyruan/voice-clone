@@ -1,7 +1,6 @@
 services:
-  # Web Service for Next.js application
   - type: web
-    name: voice-clone-app
+    name: voice-clone
     runtime: node
     region: oregon
     plan: free
@@ -14,10 +13,9 @@ services:
       - key: FISH_AUDIO_API_KEY
         sync: false
       - key: CORS_ALLOWED_ORIGINS
-        value: https://voice-clone-app.onrender.com
+        sync: false
       - key: MAX_FILE_SIZE_MB
         value: 10
-    # Persistent disk for SQLite database and audio files
     disk:
       name: voice-clone-data
       mountPath: /opt/render/project/src/voice-clone-app/data

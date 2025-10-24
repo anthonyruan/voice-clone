@@ -42,3 +42,6 @@ next-env.d.ts
 
 # database
 /data/
+
+# generated audio files
+/public/audio/
