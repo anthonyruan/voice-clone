@@ -336,9 +336,9 @@ def tts_with_fine_control():
     
     # English with phoneme control
     text_phoneme = "I am an <|phoneme_start|>EH N JH AH N IH R<|phoneme_end|>."
-    
-    # Chinese with pinyin
-    text_chinese = "我是一个<|phoneme_start|>gong1<|phoneme_end|><|phoneme_start|>cheng2<|phoneme_end|>师。"
+
+    # Mandarin with pinyin (romanized)
+    text_mandarin = "<|phoneme_start|>wo3<|phoneme_end|><|phoneme_start|>shi4<|phoneme_end|><|phoneme_start|>gong1<|phoneme_end|><|phoneme_start|>cheng2<|phoneme_end|><|phoneme_start|>shi1<|phoneme_end|>."
     
     # Paralanguage effects
     text_effects = "I am, um, an (break) engineer who (laugh) loves coding."

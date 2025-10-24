@@ -248,7 +248,7 @@ response = requests.post(
 ### Phoneme Control
 ```text
 English: "I am an <|phoneme_start|>EH N JH AH N IH R<|phoneme_end|>."
-Chinese: "我是<|phoneme_start|>gong1<|phoneme_end|><|phoneme_start|>cheng2<|phoneme_end|>师。"
+Mandarin (pinyin): "<|phoneme_start|>gong1<|phoneme_end|><|phoneme_start|>cheng2<|phoneme_end|><|phoneme_start|>shi1<|phoneme_end|>."
 ```
 
 ### Paralanguage Effects
